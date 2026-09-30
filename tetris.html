@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>USBポータブル・テトリス（最新基盤）</title>
+    <style>
+        body { background: #202030; color: #fff; font-family: sans-serif; text-align: center; }
+        canvas { border: 4px solid #fff; background: #111; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        #score-window { font-size: 24px; margin: 10px; font-weight: bold; color: #00ffcc; }
+        .info { color: #aaa; font-size: 14px; margin-top: 10px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <h1>🕹️ PORTABLE TETRIS</h1>
+    <div id="score-window">SCORE: <span id="score">0</span></div>
+    <canvas id="tetris" width="240" height="400"></canvas>
+    <div class="info">【操作方法】 ← / → : 移動  |  ↑ : 回転  |  ↓ : 高速落下</div>
+
+    <script>
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        context.scale(20, 20);
+
+        // 7種類のブロック形状データ（完全に形と色を分離しました）
+        const REAL_SHAPES = [
+            [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], // I (水色)
+            [[2,0,0],[2,2,2],[0,0,0]], // J (青)
+            [[0,0,3],[3,3,3],[0,0,0]], // L (オレンジ)
+            [[4,4],[4,4]], // O (黄色)
+            [[0,5,5],[5,5,0],[0,0,0]], // S (緑)
+            [[0,6,0],[6,6,6],[0,0,0]], // T (紫)
+            [[7,7,0],[0,7,7],[0,0,0]]  // Z (赤)
+        ];
+
+        const COLORS = [null, '#00f0f0', '#0000f0', '#f0a000', '#f0f000', '#00f000', '#a000f0', '#f00000'];
+        const arena = Array.from({length: 20}, () => Array(12).fill(0));
+        const player = { pos: {x: 0, y: 0}, matrix: null, score: 0 };
+
+        function collide(a, p) {
+            const [m, o] = [p.matrix, p.pos];
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 && (a[y + o.y] && a[y + o.y][x + o.x]) !== 0) return true;
+                }
+            }
+            return false;
+        }
+        function merge(a, p) {
+            p.matrix.forEach((row, y) => {
+                row.forEach((val, x) => { if (val !== 0) a[y + p.pos.y][x + p.pos.x] = val; });
+            });
+        }
+        function drawMatrix(matrix, offset) {
+            matrix.forEach((row, y) => {
+                row.forEach((val, x) => {
+                    if (val !== 0) {
+                        context.fillStyle = COLORS[val]; context.fillRect(x + offset.x, y + offset.y, 1, 1);
+                        context.strokeStyle = '#000'; context.lineWidth = 0.05; context.strokeRect(x + offset.x, y + offset.y, 1, 1);
+                    }
+                });
+            });
+        }
+        function draw() {
+            context.fillStyle = '#111'; context.fillRect(0, 0, canvas.width, canvas.height);
+            drawMatrix(arena, {x: 0, y: 0});
+            if (player.matrix) drawMatrix(player.matrix, player.pos);
+        }
+        function arenaSweep() {
+            let rowCount = 1;
+            outer: for (let y = arena.length - 1; y > 0; --y) {
+                for (let x = 0; x < arena[y].length; ++x) { if (arena[y][x] === 0) continue outer; }
+                const row = arena.splice(y, 1).fill(0); arena.unshift(row); ++y;
+                player.score += rowCount * 10; rowCount *= 2;
+            }
+        }
+        function playerDrop() {
+            player.pos.y++;
+            if (collide(arena, player)) {
+                player.pos.y--; merge(arena, player); playerReset(); arenaSweep();
+                document.getElementById('score').innerText = player.score;
+            }
+            dropCounter = 0;
+        }
+        function playerMove(dir) { player.pos.x += dir; if (collide(arena, player)) player.pos.x -= dir; }
+        
+        // 最初のランダムリセット
+        function playerReset() {
+            const id = Math.floor(Math.random() * REAL_SHAPES.length);
+            player.matrix = REAL_SHAPES[id]; player.pos.y = 0;
+            player.pos.x = Math.floor(arena.length / 2) - Math.floor(player.matrix.length / 2);
+            if (collide(arena, player)) { arena.forEach(row => row.fill(0)); player.score = 0; }
+        }
+        
+        function playerRotate() {
+            const pos = player.pos.x; let offset = 1; rotate(player.matrix);
+            while (collide(arena, player)) {
+                player.pos.x += offset; offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix.length) { rotate(player.matrix); player.pos.x = pos; return; }
+            }
+        }
+        function rotate(matrix) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+            }
+            matrix.forEach(row => row.reverse());
+        }
+        let dropCounter = 0, dropInterval = 1000, lastTime = 0;
+        function update(time = 0) {
+            const deltaTime = time - lastTime; lastTime = time; dropCounter += deltaTime;
+            if (dropCounter > dropInterval) playerDrop();
+            draw(); requestAnimationFrame(update);
+        }
+        document.addEventListener('keydown', event => {
+            if (event.keyCode === 37) playerMove(-1);
+            else if (event.keyCode === 39) playerMove(1);
+            else if (event.keyCode === 40) playerDrop();
+            else if (event.keyCode === 38) playerRotate();
+        });
+        playerReset(); update();
+    </script>
+</body>
+</html>
+<script>
+    // メイン画面の描画処理（draw）を上書きして、グリッド線と落下地点の影を追加するパーツ
+    (function() {
+        // 元のdraw関数をバックアップ
+        var _originalDraw = draw;
+
+        // 落下予測位置（一番下）を計算する関数
+        function getGhostY() {
+            var ghostY = player.pos.y;
+            // 衝突するまで下に仮で落とし続ける
+            while (!collide(arena, { pos: { x: player.pos.x, y: ghostY + 1 }, matrix: player.matrix })) {
+                ghostY++;
+            }
+            return ghostY;
+        }
+
+        // draw関数を新仕様にアップデート
+        draw = function() {
+            // 1. まず通常の背景、固定ブロック、操作中ブロックを描画
+            _originalDraw();
+
+            // 2. 落下地点の影（ゴースト）を描画（テトリス99風の白い枠線）
+            if (player.matrix) {
+                var ghostY = getGhostY();
+                // 今動かしているブロックがまだ底についていない時だけ影を描く
+                if (ghostY > player.pos.y) {
+                    player.matrix.forEach(function(row, y) {
+                        row.forEach(function(val, x) {
+                            if (val !== 0) {
+                                context.strokeStyle = 'rgba(255, 255, 255, 0.35)'; // 白い半透明の線
+                                context.lineWidth = 0.08;
+                                context.strokeRect(player.pos.x + x, ghostY + y, 1, 1);
+                            }
+                        });
+                    });
+                }
+            }
+
+            // 3. 画面全体に綺麗なグリッド線（マスの区切り線）を描画
+            context.strokeStyle = 'rgba(255, 255, 255, 0.06)'; // プレイの邪魔にならない薄いグレー線
+            context.lineWidth = 0.02;
+            // 縦線を引く
+            for (var x = 0; x <= 12; x++) {
+                context.beginPath();
+                context.moveTo(x, 0);
+                context.lineTo(x, 20);
+                context.stroke();
+            }
+            // 横線を引く
+            for (var y = 0; y <= 20; y++) {
+                context.beginPath();
+                context.moveTo(0, y);
+                context.lineTo(12, y);
+                context.stroke();
+            }
+        };
+    })();
+</script>
+<!-- 右側にNEXTウィンドウを配置するための画面枠パーツ -->
+<style>
+    body { display: flex; flex-direction: column; align-items: center; }
+    #game-container { display: flex; justify-content: center; align-items: flex-start; gap: 20px; margin: 0 auto; }
+    .side-panel { display: flex; flex-direction: column; align-items: center; }
+    .panel-box { border: 4px solid #fff; background: #111; padding: 10px; border-radius: 4px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+    .panel-title { font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #00ffcc; font-family: sans-serif; }
+    canvas#next { background: #111; }
+</style>
+
+<script>
+    // メイン画面（canvas）の横に、NEXT画面を自動でドッキングする処理
+    (function() {
+        var mainCanvas = document.getElementById('tetris');
+        if (mainCanvas && !document.getElementById('next-container')) {
+            // ゲーム画面を包むコンテナを作成
+            var container = document.createElement('div');
+            container.id = 'game-container';
+            mainCanvas.parentNode.insertBefore(container, mainCanvas);
+            
+            // NEXTウィンドウのHTMLを作成
+            var nextPanel = document.createElement('div');
+            nextPanel.className = 'side-panel';
+            nextPanel.id = 'next-container';
+            nextPanel.innerHTML = '<div class="panel-box"><div class="panel-title">NEXT</div><canvas id="next" width="80" height="240"></canvas></div>';
+            
+            // 順番通りにドッキング
+            container.appendChild(mainCanvas);
+            container.appendChild(nextPanel);
+        }
+
+        // NEXT表示用のキャンバスを設定
+        var nextCanvas = document.getElementById('next');
+        var nextContext = nextCanvas.getContext('2d');
+        nextContext.scale(20, 20);
+
+        // 次のブロックの手番リスト
+        window.nextPieces = window.nextPieces || [];
+        
+        // 次の予定リストを3手先まで常に補充する関数
+        function refillNext() {
+            while (window.nextPieces.length < 4) {
+                var id = Math.floor(Math.random() * REAL_SHAPES.length);
+                window.nextPieces.push(id);
+            }
+        }
+        refillNext();
+
+        // 基盤のplayerReset（ブロック生成）をNEXT連動仕様に上書き
+        playerReset = function() {
+            refillNext();
+            var currentId = window.nextPieces.shift();
+            player.matrix = REAL_SHAPES[currentId];
+            player.pos.y = 0;
+            player.pos.x = Math.floor(arena[0].length / 2) - Math.floor(player.matrix.length / 2);
+            refillNext();
+
+            if (collide(arena, player)) {
+                arena.forEach(function(row) { row.fill(0); });
+                player.score = 0;
+                window.nextPieces = [];
+                refillNext();
+            }
+        };
+
+        // 基盤のdraw（画面更新）にNEXTの3つ描画を合体させる
+        var _baseDraw = draw;
+        draw = function() {
+            _baseDraw(); // 通常の画面を描く
+
+            // NEXTキャンバスの描画
+            nextContext.fillStyle = '#111';
+            nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+            
+            // 3手先まで縦に並べて描画する
+            for (var i = 0; i < 3; i++) {
+                var id = window.nextPieces[i];
+                if (id !== undefined) {
+                    var m = REAL_SHAPES[id];
+                    var ox = (4 - m.length) / 2;
+                    var oy = i * 4 + (4 - m.length) / 2 + 0.5;
+                    
+                    m.forEach(function(row, py) {
+                        row.forEach(function(val, px) {
+                            if (val !== 0) {
+                                nextContext.fillStyle = COLORS[val];
+                                nextContext.fillRect(px + ox, py + oy, 1, 1);
+                                nextContext.strokeStyle = '#000';
+                                nextContext.lineWidth = 0.05;
+                                nextContext.strokeRect(px + ox, py + oy, 1, 1);
+                            }
+                        });
+                    });
+                }
+            }
+        };
+    })();
+</script>
+<script>
+    // キーボードの入力を監視して、スペースキーが押されたら一瞬で底まで落とすパーツ
+    (function() {
+        // 一瞬で一番下まで落として固定する処理
+        function playerHardDrop() {
+            // 衝突するまで強制的にy座標（下方向）を増やし続ける
+            while (!collide(arena, player)) {
+                player.pos.y++;
+            }
+            player.pos.y--; // 行き過ぎた分を1マス戻す
+            
+            // ブロックをそこに固定して、次のブロックへ交代する（基盤の処理を流用）
+            merge(arena, player);
+            playerReset();
+            arenaSweep();
+            document.getElementById('score').innerText = player.score;
+        }
+
+        // キーボードが押されたときのイベント処理を拡張（上書き）する
+        document.addEventListener('keydown', function(event) {
+            // スペースキー（キーコード: 32）が押された時
+            if (event.keyCode === 32) {
+                event.preventDefault(); // 画面が下にガクッとスクロールするのを防ぐ
+                if (player.matrix) {
+                    playerHardDrop(); // ハードドロップを実行！
+                }
+            }
+        });
+
+        // 画面下の説明テキストにスペースキーの操作方法を自動で書き加える
+        var infoDiv = document.querySelector('.info');
+        if (infoDiv) {
+            infoDiv.innerHTML += '  |  <strong>【スペース】 : ハードドロップ（一瞬で落とす）</strong>';
+        }
+    })();
+</script>
+<!-- 左側にHOLDウィンドウを配置するための画面枠パーツ -->
+<style>
+    canvas#hold { background: #111; }
+    #hold-container { order: -1; } /* HOLDを左側に強制移動 */
+</style>
+
+<script>
+    // メイン画面の左側に、HOLD画面を自動でドッキングして機能を追加する処理
+    (function() {
+        var container = document.getElementById('game-container');
+        var mainCanvas = document.getElementById('tetris');
+        
+        if (container && mainCanvas && !document.getElementById('hold-container')) {
+            // HOLDウィンドウのHTMLを作成してドッキング
+            var holdPanel = document.createElement('div');
+            holdPanel.className = 'side-panel';
+            holdPanel.id = 'hold-container';
+            holdPanel.innerHTML = '<div class="panel-box"><div class="panel-title">HOLD</div><canvas id="hold" width="80" height="80"></canvas></div>';
+            container.insertBefore(holdPanel, mainCanvas);
+        }
+
+        // HOLD用のキャンバスを設定
+        var holdCanvas = document.getElementById('hold');
+        var holdContext = holdCanvas.getContext('2d');
+        holdContext.scale(20, 20);
+
+        // ホールド管理用のグローバル変数
+        window.holdPieceId = null;
+        window.hasHeldInThisTurn = false;
+
+        // 基盤のplayerReset（ブロック生成）をホールド権復活仕様に拡張
+        var _baseReset = playerReset;
+        playerReset = function() {
+            window.hasHeldInThisTurn = false; // 新しいブロックになったのでホールド権を復活
+            _baseReset(); // 通常のリセット処理を実行
+        };
+
+        // ホールドキーが押されたときの入れ替えコア処理
+        function executeHoldAction() {
+            if (window.hasHeldInThisTurn) return; // その手番で既にホールドしてたらパス
+            
+            // 現在操作中のブロックの種類（ID）を特定する裏ワザ処理
+            var currentId = 0;
+            for (var i = 0; i < REAL_SHAPES.length; i++) {
+                if (JSON.stringify(REAL_SHAPES[i]) === JSON.stringify(player.matrix)) {
+                    currentId = i;
+                    break;
+                }
+            }
+
+            if (window.holdPieceId === null) {
+                // 初めてホールドする場合：今のブロックをキープして、NEXTから次のを出す
+                window.holdPieceId = currentId;
+                playerReset();
+            } else {
+                // 既にホールドにある場合：中身を入れ替えて、位置を一番上に戻す
+                var temp = currentId;
+                currentId = window.holdPieceId;
+                window.holdPieceId = temp;
+                
+                player.matrix = REAL_SHAPES[currentId];
+                player.pos.y = 0;
+                player.pos.x = Math.floor(arena[0].length / 2) - Math.floor(player.matrix.length / 2);
+            }
+            window.hasHeldInThisTurn = true; // この手番でのホールド権を消費
+        }
+
+        // キーボード入力を拡張（CキーまたはShiftキーを監視）
+        document.addEventListener('keydown', function(event) {
+            // Cキー（keyCode: 67）または Shiftキー（keyCode: 16）
+            if (event.keyCode === 67 || event.keyCode === 16) {
+                if (player.matrix) {
+                    executeHoldAction();
+                }
+            }
+        });
+
+        // 画面の更新（draw）にHOLDの描画を合体させる
+        var _nextDraw = draw;
+        draw = function() {
+            _nextDraw(); // 通常の画面を描く
+
+            // HOLDキャンバスの描画
+            holdContext.fillStyle = '#111';
+            holdContext.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+            
+            // キープしているブロックがあれば描く
+            if (window.holdPieceId !== null) {
+                var m = REAL_SHAPES[window.holdPieceId];
+                var ox = (4 - m.length) / 2;
+                var oy = (4 - m.length) / 2;
+                
+                m.forEach(function(row, py) {
+                    row.forEach(function(val, px) {
+                        if (val !== 0) {
+                            holdContext.fillStyle = COLORS[val];
+                            holdContext.fillRect(px + ox, py + oy, 1, 1);
+                            holdContext.strokeStyle = '#000';
+                            holdContext.lineWidth = 0.05;
+                            holdContext.strokeRect(px + ox, py + oy, 1, 1);
+                        }
+                    });
+                });
+            }
+        };
+
+        // 画面下の説明テキストにホールドの操作方法を自動で書き加える
+        var infoDiv = document.querySelector('.info');
+        if (infoDiv) {
+            infoDiv.innerHTML += '<br><strong>【Cキー / Shift】 : HOLD（一時保存・入れ替え）</strong>';
+        }
+    })();
+</script>
+<script>
+    // 完全にフリーズ対策をした「かぶらない（7バッグ）システム」追加パーツ
+    (function() {
+        var schoolBag = [];
+
+        // 7種類のブロック（0〜6）を1玉ずつ袋に入れてシャッフルする関数
+        function generateBag() {
+            var newBag =;
+            for (var i = newBag.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1));
+                var temp = newBag[i];
+                newBag[i] = newBag[j];
+                newBag[j] = temp;
+            }
+            return newBag;
+        }
+
+        // 次の手番リストを補充する処理を、7バッグ仕様にアップデート
+        function refillNext() {
+            while (window.nextPieces.length < 4) {
+                if (schoolBag.length === 0) {
+                    schoolBag = generateBag(); // 袋が空になったら新しく7個補充してシャッフル
+                }
+                window.nextPieces.push(schoolBag.pop()); // 袋から1個取り出してNEXTに入れる
+            }
+        }
+
+        // すでに動いている「NEXT機能」の補充システムを、このかぶらない仕様に差し替える
+        var _originalPlayerReset = playerReset;
+        playerReset = function() {
+            refillNext();
+            var currentId = window.nextPieces.shift();
+            player.matrix = REAL_SHAPES[currentId];
+            player.pos.y = 0;
+            player.pos.x = Math.floor(arena.length / 2) - Math.floor(player.matrix.length / 2);
+            window.hasHeldInThisTurn = false; // ホールド権の復活
+            refillNext();
+
+            if (collide(arena, player)) {
+                arena.forEach(function(row) { row.fill(0); });
+                player.score = 0;
+                window.nextPieces = [];
+                schoolBag = [];
+                refillNext();
+            }
+        };
+
+        // 起動時に最初のリストを7バッグで満たす
+        window.nextPieces = [];
+        schoolBag = generateBag();
+        refillNext();
+        var firstId = window.nextPieces.shift();
+        player.matrix = REAL_SHAPES[firstId];
+        player.pos.y = 0;
+        player.pos.x = Math.floor(arena.length / 2) - Math.floor(player.matrix.length / 2);
+        refillNext();
+    })();
+</script>
+<script>
+    // 画面の大見出しの文字を「PURUKOGIテトリス」に書き換えるパーツ
+    var titleElement = document.querySelector('h1');
+    if (titleElement) {
+        titleElement.innerHTML = '🕹️ PURUKOGI TETRIS';
+    }
+</script>

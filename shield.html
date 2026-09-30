@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>DEFENDER SHIELD (5秒安全基盤)</title>
+    <style>
+        body { background: #111424; color: #fff; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
+        #game-wrapper { width: 500px; margin: 0 auto; text-align: center; position: relative; }
+        canvas { background: #02060c; border: 3px solid #00d2ff; box-shadow: 0 0 20px rgba(0,210,255,0.4); border-radius: 4px; display: block; }
+        .status-window { font-size: 20px; font-weight: bold; color: #00ffcc; margin: 10px 0; text-shadow: 0 0 5px #00ffcc; height: 30px; }
+        .info { color: #8ab4f8; font-size: 13px; margin-top: 15px; background: rgba(138,180,248,0.1); padding: 8px; border-radius: 5px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <h1>🛡️ DEFENDER SHIELD</h1>
+        
+        <div class="status-window">
+            LEVEL: <span id="level-val">1</span> | TIME: <span id="time-val">2:35</span>
+        </div>
+        
+        <canvas id="game" width="500" height="500"></canvas>
+        
+        <div class="info">【操作方法】 ← / → キー : 上半分の可動範囲に沿って盾（黒点）を移動</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+
+        let gameRunning = true; 
+        let currentLevel = 1;
+        let clearCount = 0;
+        let remainingTime = 155; // 2分35秒（155秒）からスタート！
+
+        const center = { x: 250, y: 250 };
+        const orbitRadius = 60; // 最初の基本半径
+        let shieldAngle = -Math.PI / 2; // 真上スタート
+        const shieldSize = 8;
+        const rotateSpeed = 0.07;
+
+        let enemies = [];
+        const keys = {};
+
+        document.addEventListener('keydown', e => { keys[e.key] = true; });
+        document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        // 敵（矢印）を出現させる関数
+        function spawnEnemy() {
+            var spawnAngle = Math.PI + (Math.random() * Math.PI); // 上半分
+            var speed = 0.35 + (currentLevel * 0.03); 
+            
+            enemies.push({
+                x: 250 + Math.cos(spawnAngle) * 280,
+                y: 250 + Math.sin(spawnAngle) * 280,
+                angle: spawnAngle,
+                speed: speed,
+                size: 10
+            });
+        }
+
+        // 1秒刻みのメインタイマー
+        setInterval(() => {
+            if (gameRunning && remainingTime > 0) {
+                remainingTime--;
+                document.getElementById('time-val').innerText = formatTime(remainingTime);
+                
+                // ★【5秒安全ルール】155秒（2:35）からカウントを始めて、150秒（2:30）以下になったら敵を出す！
+                // つまり最初の5秒間は敵が一切降ってきません！
+                if (remainingTime <= 150) {
+                    if (Math.random() > 0.6) {
+                        spawnEnemy();
+                    }
+                }
+
+                // 守り切った（クリア）時の処理
+                if (remainingTime === 0) {
+                    clearCount++;
+                    var req = currentLevel === 1 ? 2 : 3;
+                    if (clearCount >= req) {
+                        if (currentLevel < 20) {
+                            currentLevel++; clearCount = 0;
+                            alert('レベルアップ！ レベル ' + currentLevel + ' になりました！');
+                        } else {
+                            alert('★完全全クリア達成！レベル最大20です！★');
+                        }
+                    } else {
+                        alert('防衛成功！次のレベルまであと ' + (req - clearCount) + ' 回！');
+                    }
+                    document.getElementById('level-val').innerText = currentLevel;
+                    remainingTime = 155; // 2:35に戻る
+                    enemies = [];
+                    shieldAngle = -Math.PI / 2;
+                }
+            }
+        }, 1000);
+
+        function draw() {
+            ctx.fillStyle = '#02060c';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 地面の壁（下半分）
+            ctx.fillStyle = '#161d33';
+            ctx.fillRect(0, 250, canvas.width, 250);
+            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, 250); ctx.lineTo(canvas.width, 250); ctx.stroke();
+
+            // 拠点（三角）
+            ctx.beginPath(); ctx.moveTo(250, 232); ctx.lineTo(235, 250); ctx.lineTo(265, 250); bandwidth = 1.5; ctx.closePath();
+            ctx.fillStyle = '#00d2ff'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // 可動範囲（1周目の半円）
+            ctx.beginPath();
+            ctx.arc(250, 250, orbitRadius, Math.PI, 0, false);
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.35)'; ctx.lineWidth = 2; ctx.stroke();
+
+            // 手動の盾（白ポッチ）
+            const shieldX = 250 + Math.cos(shieldAngle) * orbitRadius;
+            const shieldY = 250 + Math.sin(shieldAngle) * orbitRadius;
+            ctx.beginPath(); ctx.arc(shieldX, shieldY, shieldSize, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+
+            // 敵（赤い矢印）を描画
+            enemies.forEach(e => {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle + Math.PI);
+                ctx.beginPath(); ctx.moveTo(-e.size, -e.size/2); ctx.lineTo(0, 0); ctx.lineTo(-e.size, e.size/2);
+                ctx.strokeStyle = '#ff3344'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+            });
+        }
+
+        function update() {
+            if (keys['ArrowLeft']) shieldAngle -= rotateSpeed;
+            if (keys['ArrowRight']) shieldAngle += rotateSpeed;
+            if (shieldAngle < -Math.PI) shieldAngle = -Math.PI;
+            if (shieldAngle > 0) shieldAngle = 0;
+
+            if (gameRunning) {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    e.x -= Math.cos(e.angle) * e.speed;
+                    e.y -= Math.sin(e.angle) * e.speed;
+
+                    // 壁に触れたら即消滅
+                    if (e.y >= 250) {
+                        enemies.splice(i, 1); continue;
+                    }
+
+                    // 盾との衝突判定
+                    const sX = 250 + Math.cos(shieldAngle) * orbitRadius;
+                    const sY = 250 + Math.sin(shieldAngle) * orbitRadius;
+                    if (Math.hypot(e.x - sX, e.y - sY) < (shieldSize + 4)) {
+                        enemies.splice(i, 1); continue;
+                    }
+
+                    // 拠点とのヒット判定
+                    if (Math.hypot(e.x - 250, e.y - 250) < 15) {
+                        enemies.splice(i, 1);
+                        remainingTime = 155; // 死んだときも2:35（5秒安全タイム付き）へ戻す
+                        enemies = [];
+                        shieldAngle = -Math.PI / 2;
+                        alert('拠点が攻撃されました！最初の5秒安全ステージ（2分35秒）からリスタートします。');
+                        break;
+                    }
+                }
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        draw();
+        update();
+    </script>
+</body>
+</html>
+<!-- 画面の下に入力箱と「ハック」ボタンを出現させる画面パーツ -->
+<div class="control-panel" style="margin: 15px 0; display: flex; justify-content: center; align-items: center; gap: 10px;">
+    <input type="text" id="cheat-box" placeholder="コードを入力" style="padding: 6px 10px; font-size: 14px; border: 2px solid #00d2ff; background: #02060c; color: #fff; border-radius: 4px; text-align: center; width: 140px;">
+    <button onclick="applyCheatCode()" style="padding: 6px 12px; font-size: 14px; background: #00ffcc; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">ハック</button>
+</div>
+
+<script>
+    // ブースト01、02、03を安全に処理する追加コンテンツ
+    (function() {
+        // チートのON/OFFを管理する変数
+        window.boost01_active = false;
+        window.boost02_active = false;
+
+        // 自動往復（ブースト02）のための角度と方向の変数
+        window.autoShieldAngle = -Math.PI;
+        window.autoShieldDirection = 1;
+
+        // ボタンが押されたときにコードを判定する関数
+        window.applyCheatCode = function() {
+            var box = document.getElementById('cheat-box');
+            if (!box) return;
+            
+            var code = box.value.trim();
+
+            if (code === 'ブースト01') {
+                window.boost01_active = !window.boost01_active;
+                alert('【ブースト01】' + (window.boost01_active ? '有効：手動の盾が1.5倍に巨大化！' : '解除：通常の大きさに戻りました。'));
+            } 
+            else if (code === 'ブースト02') {
+                window.boost02_active = !window.boost02_active;
+                alert('【ブースト02】' + (window.boost02_active ? '有効：外側の線に全自動往復シールドを展開！' : '解除：自動シールドを撤去しました。'));
+            } 
+            else if (code === 'ブースト03') {
+                // 01と02を同時にONまたは同時にOFFにする
+                var targetState = !(window.boost01_active && window.boost02_active);
+                window.boost01_active = targetState;
+                window.boost02_active = targetState;
+                alert('【ブースト03】' + (targetState ? '有効：巨大化＆自動往復の同時フルパワー展開！' : '解除：すべてのブーストを停止しました。'));
+            } 
+            else {
+                alert('【エラー】コードが違います。');
+            }
+            box.value = ''; // 入力欄を空にする
+        };
+
+        // エンターキーでも発動できるようにする処理
+        setTimeout(function() {
+            var box = document.getElementById('cheat-box');
+            if (box) {
+                box.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') window.applyCheatCode();
+                });
+            }
+        }, 300);
+
+        // 衝突判定（update）に、ブースト01（巨大化）とブースト02（自動盾）をドッキング上書き！
+        var _baseUpdateForBoost = update;
+        update = function() {
+            if (keys['ArrowLeft']) shieldAngle -= rotateSpeed;
+            if (keys['ArrowRight']) shieldAngle += rotateSpeed;
+            if (shieldAngle < -Math.PI) shieldAngle = -Math.PI;
+            if (shieldAngle > 0) shieldAngle = 0;
+
+            // 【ブースト02】が有効な場合、自動往復盾の角度を一定周期で滑らかに動かす
+            if (window.boost02_active) {
+                window.autoShieldAngle += 0.035 * window.autoShieldDirection;
+                if (window.autoShieldAngle > 0) { window.autoShieldAngle = 0; window.autoShieldDirection = -1; }
+                if (window.autoShieldAngle < -Math.PI) { window.autoShieldAngle = -Math.PI; window.autoShieldDirection = 1; }
+            }
+
+            if (gameRunning) {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    e.x -= Math.cos(e.angle) * e.speed;
+                    e.y -= Math.sin(e.angle) * e.speed;
+
+                    if (e.y >= 250) { enemies.splice(i, 1); continue; }
+
+                    // --- 1. 手動の盾（半径100の位置）との衝突判定 ---
+                    const sX1 = 250 + Math.cos(shieldAngle) * 100;
+                    const sY1 = 250 + Math.sin(shieldAngle) * 100;
+                    
+                    // 【ブースト01】がONなら判定サイズを1.5倍（8から12）にする
+                    var currentShieldSize = window.boost01_active ? 12 : 8;
+                    if (Math.hypot(e.x - sX1, e.y - sY1) < (currentShieldSize + 4)) {
+                        enemies.splice(i, 1); continue;
+                    }
+
+                    // --- 2. 【ブースト02】自動往復の盾（外側・半径135の位置）との衝突判定 ---
+                    if (window.boost02_active) {
+                        const sX2 = 250 + Math.cos(window.autoShieldAngle) * 135;
+                        const sY2 = 250 + Math.sin(window.autoShieldAngle) * 135;
+                        // 通常サイズ（8）の自動シールド判定
+                        if (Math.hypot(e.x - sX2, e.y - sY2) < (8 + 4)) {
+                            enemies.splice(i, 1); continue;
+                        }
+                    }
+
+                    if (Math.hypot(e.x - 250, e.y - 250) < 15) {
+                        enemies.splice(i, 1);
+                        remainingTime = 155; // 2:35リスタート
+                        enemies = [];
+                        shieldAngle = -Math.PI / 2;
+                        window.autoShieldAngle = -Math.PI; // 自動盾の位置もリセット
+                        window.autoShieldDirection = 1;
+                        alert('拠点が攻撃されました！最初の5秒安全ステージ（2分35秒）からリスタートします。');
+                        break;
+                    }
+                }
+            }
+            draw();
+            requestAnimationFrame(update);
+        };
+
+        // 画面に「巨大化した盾」や「自動往復する外側のサークルと盾」を描く処理（draw）の上書き
+        draw = function() {
+            ctx.fillStyle = '#02060c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#161d33'; ctx.fillRect(0, 250, canvas.width, 250);
+            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 250); ctx.lineTo(canvas.width, 250); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(250, 232); ctx.lineTo(235, 250); ctx.lineTo(265, 250); ctx.closePath(); ctx.fillStyle = '#00d2ff'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // 1つ目の円（手動の線：半径100）を描く
+            ctx.beginPath(); ctx.arc(250, 250, 100, Math.PI, 0, false);
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.35)'; ctx.lineWidth = 2; ctx.stroke();
+
+            // 手動の盾（白ポッチ）を描く
+            const shieldX = 250 + Math.cos(shieldAngle) * 100;
+            const shieldY = 250 + Math.sin(shieldAngle) * 100;
+            ctx.beginPath();
+            
+            // 【ブースト01】ONならサイズを1.5倍（12）にして、色をハッカー感のある「ネオングリーン」に変えてアピール！
+            var drawSize = window.boost01_active ? 12 : 8;
+            ctx.arc(shieldX, shieldY, drawSize, 0, Math.PI * 2);
+            ctx.fillStyle = window.boost01_active ? '#00ffcc' : '#ffffff'; 
+            ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+
+            // 【ブースト02】がON、またはブースト03の時に、外側の線（半径135）と自動往復盾を描く
+            if (window.boost02_active) {
+                // 外側の線をハッキリ表示
+                ctx.beginPath(); ctx.arc(250, 250, 135, Math.PI, 0, false);
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.45)'; ctx.lineWidth = 2; ctx.stroke();
+
+                // 自動往復するピンクのシールドを描画！
+                const shieldX2 = 250 + Math.cos(window.autoShieldAngle) * 135;
+                const shieldY2 = 250 + Math.sin(window.autoShieldAngle) * 135;
+                ctx.beginPath(); ctx.arc(shieldX2, shieldY2, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff33aa'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+            }
+
+            enemies.forEach(e => {
+                ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle + Math.PI);
+                ctx.beginPath(); ctx.moveTo(-e.size, -e.size/2); ctx.lineTo(0, 0); ctx.lineTo(-e.size, e.size/2);
+                ctx.strokeStyle = '#ff3344'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+            });
+        };
+    })();
+</script>
+<script>
+    // 拠点（三角）が攻撃されたときに、すべてのチートブーストを強制OFF（リセット）にする追加コンテンツ
+    (function() {
+        // 基盤の衝突・ヒット判定（update）を拡張して、死んだ瞬間にチート解除を強制割り込みさせます
+        var _originalUpdateWithCheatReset = update;
+        
+        update = function() {
+            // すでに動いているチートや移動の処理をそのまま実行
+            _originalUpdateWithCheatReset();
+
+            if (window.gameRunning && window.enemies) {
+                for (var i = window.enemies.length - 1; i >= 0; i--) {
+                    var e = window.enemies[i];
+                    var kx = e.x - 250;
+                    var ky = e.y - 250;
+                    
+                    // 拠点（三角）に敵の矢印が当たってしまった瞬間の処理
+                    if ((kx * kx + ky * ky) < 225) {
+                        // ★【新・毎回入力制ルール】死んだ瞬間に、すべてのチートブーストを強制的に全解除！
+                        window.boost01_active = false;
+                        window.boost02_active = false;
+                        
+                        // 入力欄もきれいに空っぽにする
+                        var box = document.getElementById('cheat-box');
+                        if (box) box.value = '';
+
+                        // 画面の下の表示（draw）をすぐに通常状態に戻すための強制呼び出し
+                        draw();
+                        
+                        // ※5秒の安全準備リスタートなどの基本機能はそのまま裏で美しく連動します
+                        break;
+                    }
+                }
+            }
+        };
+    })();
+</script>
+<script>
+    // ブラウザの画面に警告（alert）が出た瞬間を乗っ取り、チートを100%確実に強制解除するパーツ
+    (function() {
+        // ブラウザが元々持っている「alert」の機能を、裏側で一度キープします
+        var _originalBrowserAlert = window.alert;
+
+        // アラートの機能そのものをハッキングして上書きします
+        window.alert = function(message) {
+            // もしポップアップの文字に「拠点が攻撃されました」という言葉が入っていたら…
+            if (message && message.indexOf('拠点') !== -1) {
+                // ★【毎回入力制ルール】裏で大暴れしているチートのスイッチを、確実に「false（偽）」に叩き落とします！
+                window.boost01_active = false;
+                window.boost02_active = false;
+                
+                // 外側の自動往復シールドの角度と向きも、最初のスタート位置に強制リセット
+                window.autoShieldAngle = -Math.PI;
+                window.autoShieldDirection = 1;
+
+                // チート入力欄の箱の中身もキレイに空っぽにクリアします
+                var box = document.getElementById('cheat-box');
+                if (box) box.value = '';
+                
+                // 画面から巨大な盾やピンクの線を今すぐ消すために、描画処理(draw)を今すぐ強制実行
+                if (typeof draw === 'function') {
+                    draw();
+                }
+            }
+
+            // チートを消し去ったあとに、いつもの「拠点が攻撃されました！」の画面を表示します
+            _originalBrowserAlert(message);
+        };
+    })();
+</script>
+<script>
+    // 【キープ枠第3弾】10秒間、拠点から180度全方位に弾を猛連射する『ブースト05』を追加するパーツ
+    (function() {
+        // マシンガン状態を管理する変数
+        window.boost05_active = false;
+        window.playerBullets = []; // 発射された弾を記憶する配列
+        window.machinegunTimer = 0; // 10秒を数えるタイマー
+
+        // チート入力関数（applyCheatCode）を上書き拡張して「ブースト05」を使えるようにします
+        var _baseApplyWith05Machinegun = window.applyCheatCode;
+        
+        window.applyCheatCode = function() {
+            var box = document.getElementById('cheat-box');
+            if (!box) return;
+            var code = box.value.trim();
+
+            // 01〜04は今までの処理（巨大化、自動往復、一発合格）をそのまま実行
+            if (code === 'ブースト01' || code === 'ブースト02' || code === 'ブースト03' || code === 'ブースト04') {
+                if (typeof _baseApplyWith05Machinegun === 'function') _baseApplyWith05Machinegun();
+                return;
+            }
+
+            // 新しい『ブースト05：マシンガンハック』の判定
+            if (code === 'ブースト05') {
+                if (!window.boost05_active) {
+                    window.boost05_active = true;
+                    window.machinegunTimer = 10; // 10秒セット
+                    window.playerBullets = [];   // 弾をクリア
+                    alert('【ブースト05】有効：拠点マシンガン起動！10秒間、上空180度に向けて弾をバリバリ猛連射します！');
+                } else {
+                    window.boost05_active = false;
+                    window.playerBullets = [];
+                    alert('【ブースト05】解除：マシンガンを停止しました。');
+                }
+            } else {
+                alert('【エラー】コードが違います。');
+            }
+            box.value = ''; // 入力欄を空にする
+        };
+
+        // 1秒ごとのループ処理に、マシンガンの10秒カウントダウンをドッキング
+        setInterval(function() {
+            if (window.gameRunning && window.boost05_active) {
+                if (window.machinegunTimer > 0) {
+                    window.machinegunTimer--;
+                    if (window.machinegunTimer === 0) {
+                        window.boost05_active = false;
+                        window.playerBullets = [];
+                        // 10秒経ったら自動で弾切れアラートを出す
+                        if (typeof alert === 'function') {
+                            alert('【弾切れ】マシンガンの10秒制限が終了しました！通常の盾防衛に戻ります。');
+                        }
+                    }
+                }
+            }
+        }, 1000);
+
+        // ゲームループ（update）を拡張し、弾の発射・移動・敵との衝突判定を組み込みます！
+        var _originalUpdateForMachinegun = update;
+        update = function() {
+            _originalUpdateForMachinegun(); // 既存の盾や敵の動きを実行
+
+            if (window.gameRunning) {
+                // --- 1. マシンガン発動中、毎フレーム弾を自動生成（超猛連射） ---
+                if (window.boost05_active) {
+                    // 1回につき3方向（左上・真上・右上など）にランダムに弾をばら撒く（上空180度カバー）
+                    for (var k = 0; k < 3; k++) {
+                        var shootAngle = -Math.PI + (Math.random() * Math.PI); // 真横から真横までの上半分180度
+                        window.playerBullets.push({
+                            x: 250, // 拠点の中心から発射
+                            y: 235,
+                            vx: Math.cos(shootAngle) * 5, // 弾の飛ぶスピード
+                            vy: Math.sin(shootAngle) * 5
+                        });
+                    }
+                }
+
+                // --- 2. 弾の移動と画面外消滅チェック ---
+                if (window.playerBullets) {
+                    for (var b = window.playerBullets.length - 1; b >= 0; b--) {
+                        var bullet = window.playerBullets[b];
+                        bullet.x += bullet.vx;
+                        bullet.y += bullet.vy;
+
+                        // 画面の外（上や左右）に出たら弾を配列から消す
+                        if (bullet.y < 0 || bullet.x < 0 || bullet.x > 500) {
+                            window.playerBullets.splice(b, 1);
+                            continue;
+                        }
+
+                        // --- 3. 弾と敵（矢印）の衝突判定（弾が当たったらカンカン敵が消える！） ---
+                        if (window.enemies) {
+                            for (var e = window.enemies.length - 1; e >= 0; e--) {
+                                var enemy = window.enemies[e];
+                                // 弾と敵の距離が近いか計算（半径12マス以内）
+                                if (Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) < 12) {
+                                    window.enemies.splice(e, 1); // 敵を撃破（消滅）！
+                                    window.playerBullets.splice(b, 1); // 弾も消滅
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // 画面描画（draw）を拡張して、連射されるサイバーブルーの弾を描く
+        var _originalDrawForMachinegun = draw;
+        draw = function() {
+            _originalDrawForMachinegun(); // 既存の画面・敵・盾を描画
+
+            // 弾（光る丸）の描画
+            if (window.gameRunning && window.playerBullets) {
+                window.playerBullets.forEach(function(b) {
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); // 4マスの小さな弾
+                    ctx.fillStyle = '#00ffff'; // ハッカーらしい鮮やかなサイバーブルー
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+            }
+        };
+
+        // 死んだとき（毎回入力制ルール）に、新しく入れた05マシンガンも強制解除リセットさせる連動
+        var _originalAlertWithMachinegunReset = window.alert;
+        window.alert = function(message) {
+            if (message && message.indexOf('拠点') !== -1) {
+                window.boost05_active = false; // 死んだらマシンガンも強制リセット
+                window.playerBullets = [];     // 画面に残った弾も全消去
+            }
+            _originalAlertWithMachinegunReset(message);
+        };
+    })();
+</script>
+<script>
+    // 古いパーツの描画ループを完全に上書きし、マシンガンの弾を100%確実に発射・描画させる最終パーツ
+    (function() {
+        // マシンガンの状態や弾の配列がなければ新しく用意
+        if (typeof window.boost05_active === 'undefined') window.boost05_active = false;
+        if (!window.playerBullets) window.playerBullets = [];
+        if (typeof window.machinegunTimer === 'undefined') window.machinegunTimer = 0;
+
+        // 1. ゲームループ（update）を完全上書き。古いパーツのループに負けない強力な判定を敷きます
+        window.update = function() {
+            // 手動の盾の移動
+            if (keys['ArrowLeft']) shieldAngle -= rotateSpeed;
+            if (keys['ArrowRight']) shieldAngle += rotateSpeed;
+            if (shieldAngle < -Math.PI) shieldAngle = -Math.PI;
+            if (shieldAngle > 0) shieldAngle = 0;
+
+            // 自動往復盾（ブースト02）の移動
+            if (window.boost02_active) {
+                window.autoShieldAngle += 0.035 * window.autoShieldDirection;
+                if (window.autoShieldAngle > 0) { window.autoShieldAngle = 0; window.autoShieldDirection = -1; }
+                if (window.autoShieldAngle < -Math.PI) { window.autoShieldAngle = -Math.PI; window.autoShieldDirection = 1; }
+            }
+
+            if (window.gameRunning) {
+                // ★【マシンガン発射】ブースト05がONなら、毎フレーム3方向（180度）へ弾を自動生成！
+                if (window.boost05_active) {
+                    for (var k = 0; k < 3; k++) {
+                        var shootAngle = -Math.PI + (Math.random() * Math.PI); // 上半分180度
+                        window.playerBullets.push({
+                            x: 250, // 拠点（三角）の先端付近から発射
+                            y: 235,
+                            vx: Math.cos(shootAngle) * 6, // 弾の速度を少しアップしてさらに爽快に！
+                            vy: Math.sin(shootAngle) * 6
+                        });
+                    }
+                }
+
+                // 弾の移動と画面外消滅、および敵との衝突判定
+                if (window.playerBullets) {
+                    for (var b = window.playerBullets.length - 1; b >= 0; b--) {
+                        var bullet = window.playerBullets[b];
+                        bullet.x += bullet.vx;
+                        bullet.y += bullet.vy;
+
+                        if (bullet.y < 0 || bullet.x < 0 || bullet.x > 500) {
+                            window.playerBullets.splice(b, 1);
+                            continue;
+                        }
+
+                        // 弾が敵に当たったら、その敵も弾も両方消滅！（カンカン撃ち落とす）
+                        if (window.enemies) {
+                            for (var e = window.enemies.length - 1; e >= 0; e--) {
+                                var enemy = window.enemies[e];
+                                if (Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y) < 14) {
+                                    window.enemies.splice(e, 1);
+                                    window.playerBullets.splice(b, 1);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 敵の移動と盾・拠点への衝突判定
+                if (window.enemies) {
+                    for (var i = window.enemies.length - 1; i >= 0; i--) {
+                        var e = window.enemies[i];
+                        e.x -= Math.cos(e.angle) * e.speed;
+                        e.y -= Math.sin(e.angle) * e.speed;
+
+                        if (e.y >= 250) { window.enemies.splice(i, 1); continue; }
+
+                        // 1つ目の手動の盾（半径60）との判定
+                        var sX = 250 + Math.cos(shieldAngle) * 60;
+                        var sY = 250 + Math.sin(shieldAngle) * 60;
+                        var currentShieldSize = window.boost01_active ? 12 : 8;
+                        if (Math.hypot(e.x - sX, e.y - sY) < (currentShieldSize + 4)) {
+                            window.enemies.splice(i, 1); continue;
+                        }
+
+                        // 自動往復の盾（ブースト02：半径135）との判定
+                        if (window.boost02_active) {
+                            var sX2 = 250 + Math.cos(window.autoShieldAngle) * 135;
+                            var sY2 = 250 + Math.sin(window.autoShieldAngle) * 135;
+                            if (Math.hypot(e.x - sX2, e.y - sY2) < (8 + 4)) {
+                                window.enemies.splice(i, 1); continue;
+                            }
+                        }
+
+                        // 拠点（三角）とのヒット判定（死んだらチート全解除ルール）
+                        if (Math.hypot(e.x - 250, e.y - 250) < 15) {
+                            window.enemies.splice(i, 1);
+                            
+                            window.boost01_active = false;
+                            window.boost02_active = false;
+                            window.boost04_active = false;
+                            window.boost05_active = false;
+                            window.playerBullets = [];
+                            
+                            var box = document.getElementById('cheat-box');
+                            if (box) box.value = '';
+
+                            remainingTime = 155; // 2:35リスタート
+                            enemies = [];
+                            shieldAngle = -Math.PI / 2;
+                            
+                            alert('拠点が攻撃されました！すべてのチートが解除され、最初の5秒安全タイム（2分35秒）からリスタートします。');
+                            break;
+                        }
+                    }
+                }
+            }
+            window.draw(); // 新しいdrawを確実に実行
+            requestAnimationFrame(window.update);
+        };
+
+        // 2. 画面描画（draw）を完全上書き。古いパーツに消されずにサイバー弾を100%画面に映します！
+        window.draw = function() {
+            ctx.fillStyle = '#02060c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#161d33'; ctx.fillRect(0, 250, canvas.width, 250);
+            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 250); ctx.lineTo(canvas.width, 250); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(250, 232); ctx.lineTo(235, 250); ctx.lineTo(265, 250); ctx.closePath(); ctx.fillStyle = '#00d2ff'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+
+            // 1つ目の円を描く
+            ctx.beginPath(); ctx.arc(250, 250, 60, Math.PI, 0, false);
+            ctx.strokeStyle = 'rgba(0, 210, 255, 0.35)'; ctx.lineWidth = 2; ctx.stroke();
+
+            // 手動の盾（白または緑ポッチ）
+            const shieldX = 250 + Math.cos(shieldAngle) * 60;
+            const shieldY = 250 + Math.sin(shieldAngle) * 60;
+            ctx.beginPath();
+            var drawSize = window.boost01_active ? 12 : 8;
+            ctx.arc(shieldX, shieldY, drawSize, 0, Math.PI * 2);
+            ctx.fillStyle = window.boost01_active ? '#00ffcc' : '#ffffff'; 
+            ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+
+            // 自動往復シールド（ブースト02：外側半径135）
+            if (window.boost02_active) {
+                ctx.beginPath(); ctx.arc(250, 250, 135, Math.PI, 0, false);
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.45)'; ctx.lineWidth = 2; ctx.stroke();
+
+                const shieldX2 = 250 + Math.cos(window.autoShieldAngle) * 135;
+                const shieldY2 = 250 + Math.sin(window.autoShieldAngle) * 135;
+                ctx.beginPath(); ctx.arc(shieldX2, shieldY2, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff33aa'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+            }
+
+            // ★【弾の描画】サイバーブルーの弾を確実に画面に表示させる
+            if (window.gameRunning && window.playerBullets) {
+                window.playerBullets.forEach(function(b) {
+                    ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#00ffff'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+                });
+            }
+
+            // 敵（赤い矢印）の描画
+            if (window.enemies) {
+                window.enemies.forEach(e => {
+                    ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.angle + Math.PI);
+                    ctx.beginPath(); ctx.moveTo(-e.size, -e.size/2); ctx.lineTo(0, 0); ctx.lineTo(-e.size, e.size/2);
+                    ctx.strokeStyle = '#ff3344'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+                });
+            }
+        };
+    })();
+</script>

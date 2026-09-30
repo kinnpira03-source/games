@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRIVATE GAME HUB (独立管理版)</title>
+    <style>
+        /* サイバーでスタイリッシュな黒基調のデザイン */
+        body { background: #0b0f19; color: #fff; font-family: sans-serif; margin: 0; padding: 0; min-height: 100vh; }
+        header { background: #111827; padding: 20px; text-align: center; border-bottom: 2px solid #00d2ff; box-shadow: 0 4px 20px rgba(0,210,255,0.2); }
+        header h1 { margin: 0; font-size: 26px; letter-spacing: 2px; color: #00d2ff; text-shadow: 0 0 10px rgba(0,210,255,0.5); }
+        header p { margin: 5px 0 0 0; color: #9ca3af; font-size: 13px; }
+        
+        /* ゲーム一覧のフォルダ風レイアウト */
+        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+        .grid-title { font-size: 18px; color: #00ffcc; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; border-left: 4px solid #00ffcc; padding-left: 10px; }
+        .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 25px; }
+        
+        /* ゲームカードのデザイン */
+        .game-card { background: #1f2937; border: 1px solid #374151; border-radius: 8px; overflow: hidden; transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; flex-direction: column; text-decoration: none; color: inherit; }
+        .game-card:hover { transform: translateY(-5px); border-color: #00d2ff; box-shadow: 0 10px 20px rgba(0,210,255,0.2); }
+        .card-preview { height: 110px; background: #111827; display: flex; align-items: center; justify-content: center; font-size: 44px; border-bottom: 1px solid #374151; }
+        .card-body { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+        .card-title { font-size: 17px; font-weight: bold; margin: 0 0 12px 0; color: #fff; text-align: center; }
+        .play-btn { background: #00d2ff; color: #000; border: none; padding: 10px 0; width: 100%; border-radius: 4px; font-weight: bold; text-align: center; font-size: 14px; display: block; transition: background 0.2s; }
+        .game-card:hover .play-btn { background: #00ffcc; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🕹️ PRIVATE GAME HUB</h1>
+        <p>同じフォルダ内のゲームファイルを安全に呼び出す独立型マイサーバー</p>
+    </header>
+
+    <div class="container">
+        <div class="grid-title">📁 マイフォルダ / 登録済みアプリ (全 2 個)</div>
+        
+        <div class="game-grid">
+            
+            <!-- 🛡️ 1つ目のゲーム：防衛ゲームへのリンクボタン -->
+            <!-- href="shield.html" と書くだけで、隣にある防衛ゲームを安全に起動します -->
+            <a href="shield.html" class="game-card">
+                <div class="card-preview">🛡️</div>
+                <div class="card-body">
+                    <h3 class="card-title">DEFENDER SHIELD</h3>
+                    <div class="play-btn">プレイする</div>
+                </div>
+            </a>
+
+            <!-- 🧱 2つ目のゲーム：テトリスへのリンクボタン -->
+            <!-- href="tetris.html" と書くだけで、隣にあるテトリスを安全に起動します -->
+            <a href="tetris.html" class="game-card">
+                <div class="card-preview">🧱</div>
+                <div class="card-body">
+                    <h3 class="card-title">TETRIS</h3>
+                    <div class="play-btn">プレイする</div>
+                </div>
+            </a>
+
+            <!-- 💡【ゲームを新しく追加する方法】
+                 今後ゲームが増えたら、この下に同じように <a href="新ゲーム.html">〜</a> の塊を
+                 コピーして増やすだけで、何個でもカードを増設できます！ -->
+
+        </div>
+    </div>
+
+</body>
+</html>
+<!-- 右上に「ゲームを追加」ボタンを大復活させる画面パーツ -->
+<div class="admin-panel" style="position: absolute; right: 20px; top: 25px; z-index: 100;">
+    <button class="add-btn" onclick="triggerIndependentAdd()" style="background: #00ffcc; color: #000; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 0 10px rgba(0,255,204,0.3);">＋ ゲームを追加</button>
+    <!-- バックヤードで動く隠しファイルフォーム -->
+    <input type="file" id="hidden-file-link-input" accept=".html" onchange="handleIndependentFileSelect(event)" style="display: none;">
+</div>
+
+<script>
+    // 独立したゲームファイルを安全に一覧へ登録・追加する拡張スクリプト
+    (function() {
+        // ページが読み込まれた時に、すでに登録されている追加ゲームがあれば自動で表示する
+        window.addEventListener('DOMContentLoaded', function() {
+            loadCustomGames();
+        });
+
+        // 「ゲームを追加」ボタンが押されたときのアクション
+        window.triggerIndependentAdd = function() {
+            // パスワード機能は完成直前に入れるため、現時点ではそのままファイル選択を開きます
+            document.getElementById('hidden-file-link-input').click();
+        };
+
+        // フォルダからファイルが選ばれたときの処理
+        window.handleIndependentFileSelect = function(event) {
+            var files = event.target.files;
+            if (!files || files.length === 0) return;
+            var file = files[0]; // 選択されたファイルを確実にキャッチ
+
+            // ファイル名（例: sample.html）をそのままゲームのIDとタイトルにします
+            var fileName = file.name; // 「sample.html」という文字列
+            var gameTitle = fileName.replace(".html", "").toUpperCase(); // 「SAMPLE」にする
+
+            // ブラウザの秘密の引き出し（保存メモリ）にゲームのファイル名を記憶させる
+            var savedList = localStorage.getItem('custom_game_list');
+            var gamesArray = savedList ? JSON.parse(savedList) : [];
+
+            // すでに同じ名前のゲームが登録されていなければ追加
+            var isExist = gamesArray.some(function(g) { return g.file === fileName; });
+            if (!isExist) {
+                gamesArray.push({
+                    title: gameTitle,
+                    file: fileName
+                });
+                localStorage.setItem('custom_game_list', JSON.stringify(gamesArray));
+            } else {
+                alert('【確認】そのゲームは既に一覧に登録されています！');
+            }
+
+            // 一覧表示を新しく更新する
+            loadCustomGames();
+
+            // 次の選択のためにフォームをクリア
+            event.target.value = '';
+        };
+
+        // 記憶されている追加ゲームを読み込んで、画面にカードを増設する関数
+        window.loadCustomGames = function() {
+            // 追加分を表示するための専用エリアがなければ、ゲームグリッド（game-grid）の末尾に自動でカードをくっつけます
+            var grid = document.querySelector('.game-grid');
+            if (!grid) return;
+
+            // 過去に自分が追加したカードの残骸を一度きれいに消去（元からあるテトリスと防衛ゲームは消えません）
+            var oldCards = document.querySelectorAll('.custom-added-card');
+            oldCards.forEach(function(c) { c.remove(); });
+
+            // メモリから追加ゲームのデータを取得
+            var savedList = localStorage.getItem('custom_game_list');
+            var gamesArray = savedList ? JSON.parse(savedList) : [];
+
+            // トータルのゲーム個数（全 2 個 の部分）を書き換える
+            var countSpan = document.getElementById('game-count') || document.querySelector('#main-hub span');
+            if (countSpan) {
+                countSpan.innerText = (2 + gamesArray.length);
+            } else {
+                // タイトル横の「全 2 個」の数字部分を強制キャッチして書き換え
+                var titleDiv = document.querySelector('.grid-title');
+                if (titleDiv) {
+                    titleDiv.innerHTML = '📁 マイフォルダ / 登録済みアプリ (全 ' + (2 + gamesArray.length) + ' 個)';
+                }
+            }
+
+            // 追加された数だけ、新しくリンク型のゲームカードを作って画面にポンポン並べる
+            gamesArray.forEach(function(game) {
+                var cardAnchor = document.createElement('a');
+                cardAnchor.href = game.file; // フォルダ内のそのファイルへ直接ジャンプさせる安全リンク
+                cardAnchor.className = 'game-card custom-added-card';
+                
+                // 元のスタイルと完全に統一したデザインを流し込む
+                cardAnchor.innerHTML = `
+                    <div class="card-preview">🎮</div>
+                    <div class="card-body">
+                        <h3 class="card-title" style="font-size: 17px; font-weight: bold; margin: 0 0 12px 0; color: #fff; text-align: center;">${game.title}</h3>
+                        <div class="play-btn" style="background: #00d2ff; color: #000; border: none; padding: 10px 0; width: 100%; border-radius: 4px; font-weight: bold; text-align: center; font-size: 14px; display: block; transition: background 0.2s;">プレイする</div>
+                    </div>
+                `;
+                
+                // グリッドの中にカードを結合
+                grid.appendChild(cardAnchor);
+            });
+        };
+    })();
+</script>
+<style>
+<style>
+    /* 追加されたゲームカードを「削除ボタン」が置ける構造に変形します */
+    .custom-added-card {
+        position: relative !important;
+    }
+    /* ❌消去ボタンのデザイン（右上に小さくお洒落に配置） */
+    .delete-card-btn {
+        position: absolute !important;
+        top: 8px !important;
+        right: 8px !important;
+        background: rgba(239, 68, 68, 0.2) !important;
+        color: #ef4444 !important;
+        border: 1px solid #ef4444 !important;
+        width: 24px !important;
+        height: 24px !important;
+        border-radius: 4px !important;
+        font-size: 12px !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s ease !important;
+        z-index: 10 !important;
+    }
+    /* マウスを当てたときに赤く光るエフェクト */
+    .delete-card-btn:hover {
+        background: #ef4444 !important;
+        color: #fff !important;
+        box-shadow: 0 0 10px rgba(239,68,68,0.5) !important;
+        transform: scale(1.1) !important;
+    }
+</style>
+
+<script>
+    // 追加したゲームを一覧からいつでも完全に消去できるようにする修正スクリプト
+    (function() {
+        // カード一覧を描き出すメイン関数（refreshGameGrid）を上書きして、消去ボタンを埋め込みます
+        window.refreshGameGrid = function() {
+            var grid = document.getElementById('grid-container');
+            var countSpan = document.getElementById('game-count');
+            if (!grid || !countSpan) return;
+            
+            grid.innerHTML = "";
+            countSpan.innerText = window.loadedGames.length;
+
+            if (window.loadedGames.length === 0) {
+                grid.innerHTML = '<div class="empty-message">ゲームがまだ登録されていません。「ゲームを追加」からファイルを選択してください。</div>';
+                return;
+            }
+
+            // 登録されている数だけカードを生成
+            window.loadedGames.forEach(function(game) {
+                var card = document.createElement('div');
+                card.className = 'game-card custom-added-card';
+                
+                // 元のテトリスと防衛ゲーム（固定枠）か、後から追加したゲーム（自由枠）かを判別
+                // IDに「game-id-」が含まれているものが、追加されたゲームです
+                var deleteButtonHtml = "";
+                if (game.id.indexOf('game-id-') !== -1) {
+                    // 追加されたゲームの右上だけに、❌ボタンのコードを設置します
+                    deleteButtonHtml = '<button class="delete-card-btn" onclick="confirmDeleteGame(event, \'' + game.id + '\')">❌</button>';
+                }
+
+                card.innerHTML = `
+                    ${deleteButtonHtml}
+                    <div class="card-preview">🎮</div>
+                    <div class="card-body">
+                        <h3 class="card-title" style="font-size: 17px; font-weight: bold; margin: 0 0 8px 0; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;">${game.title}</h3>
+                        <button class="play-btn" onclick="window.launchGame('${game.id}')">プレイする</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        };
+
+        // ❌ボタンがクリックされたときに、データを完全に消し去る消去命令
+        window.confirmDeleteGame = function(event, gameId) {
+            // 下にある「プレイする」ボタンが同時に勝手に反応しないようにブロック
+            event.stopPropagation();
+            
+            // 確認のポップアップを表示
+            var check = confirm("このゲームをフォルダ一覧から完全に削除してもよろしいですか？");
+            if (check) {
+                // 配列（loadedGames）の中から、一致するIDのゲームを見つけて消去
+                window.loadedGames = window.loadedGames.filter(function(game) {
+                    return game.id !== gameId;
+                });
+                
+                // 画面をリフレッシュして、消去したカードを消し去る
+                window.refreshGameGrid();
+            }
+        };
+    })();
+</script>
+<style>
+    /* 追加されたカスタムカードを、削除ボタンが綺麗に置ける構造に変形します */
+    .custom-added-card {
+        position: relative !important;
+    }
+    /* ❌消去ボタンのデザイン（カードの右上に小さくお洒落に配置） */
+    .independent-delete-btn {
+        position: absolute !important;
+        top: 8px !important;
+        right: 8px !important;
+        background: rgba(239, 68, 68, 0.2) !important;
+        color: #ef4444 !important;
+        border: 1px solid #ef4444 !important;
+        width: 24px !important;
+        height: 24px !important;
+        border-radius: 4px !important;
+        font-size: 11px !important;
+        font-weight: bold !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.2s ease !important;
+        z-index: 999 !important;
+    }
+    /* マウスの矢印を当てたときに赤く光るハッカーエフェクト */
+    .independent-delete-btn:hover {
+        background: #ef4444 !important;
+        color: #fff !important;
+        box-shadow: 0 0 10px rgba(239,68,68,0.6) !important;
+        transform: scale(1.1) !important;
+    }
+</style>
+
+<script>
+    // 独立管理版の引き出し（localStorage）と完全に連動して❌ボタンを大復活させる修正スクリプト
+    (function() {
+        // カードを画面に並べるメイン関数（loadCustomGames）を上書きして、追加分に❌ボタンを確実に埋め込みます
+        window.loadCustomGames = function() {
+            var grid = document.querySelector('.game-grid');
+            if (!grid) return;
+
+            // 過去に自分が追加したカードの残骸を一度きれいに画面からお掃除
+            var oldCards = document.querySelectorAll('.custom-added-card');
+            oldCards.forEach(function(c) { c.remove(); });
+
+            // メモリから追加ゲームのリスト（ファイル名など）を取得
+            var savedList = localStorage.getItem('custom_game_list');
+            var gamesArray = savedList ? JSON.parse(savedList) : [];
+
+            // トータルのゲーム個数（全 3 個 などの表示）を書き換え
+            var countSpan = document.getElementById('game-count') || document.querySelector('#main-hub span');
+            if (countSpan) {
+                countSpan.innerText = (2 + gamesArray.length);
+            } else {
+                var titleDiv = document.querySelector('.grid-title');
+                if (titleDiv) {
+                    titleDiv.innerHTML = '📁 マイフォルダ / 登録済みアプリ (全 ' + (2 + gamesArray.length) + ' 個)';
+                }
+            }
+
+            // 追加されたゲームの数だけ、右上に❌ボタンを持たせた新しいカードを生成します
+            gamesArray.forEach(function(game) {
+                var cardAnchor = document.createElement('a');
+                cardAnchor.href = game.file; // フォルダ内のファイルへの直通リンク
+                cardAnchor.className = 'game-card custom-added-card';
+                
+                // 元のカッコいいスタイルと100%統一したデザイン
+                // ★【ここが最大の復活ハック！】 カードの中に独立専用の「❌ボタン」のコードを強制注入します！
+                cardAnchor.innerHTML = `
+                    <button class="independent-delete-btn" onclick="deleteIndependentGame(event, '${game.file}')">❌</button>
+                    <div class="card-preview">🎮</div>
+                    <div class="card-body">
+                        <h3 class="card-title" style="font-size: 17px; font-weight: bold; margin: 0 0 12px 0; color: #fff; text-align: center;">${game.title}</h3>
+                        <div class="play-btn" style="background: #00d2ff; color: #000; border: none; padding: 10px 0; width: 100%; border-radius: 4px; font-weight: bold; text-align: center; font-size: 14px; display: block; transition: background 0.2s;">プレイする</div>
+                    </div>
+                `;
+                
+                // グリッドの一番最後にガチッと結合
+                grid.appendChild(cardAnchor);
+            });
+        };
+
+        // ❌ボタンがクリックされたときに、メモリからそのゲームを完全に抹殺する関数
+        window.deleteIndependentGame = function(event, fileTarget) {
+            // ボタンを押したときに、後ろにあるゲーム起動リンクが同時に暴発するのを100%完全にガードします！
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // 削除確認の通知ポップアップを出す
+            var check = confirm("この追加ゲームを一覧から削除してもよろしいですか？\n(パソコン内の実際のファイルは消えません)");
+            if (check) {
+                var savedList = localStorage.getItem('custom_game_list');
+                var gamesArray = savedList ? JSON.parse(savedList) : [];
+                
+                // クリックされたカードのファイル名以外のゲームだけを残す（＝お目当てのゲームを消去）
+                gamesArray = gamesArray.filter(function(game) {
+                    return game.file !== fileTarget;
+                });
+                
+                // 新しいリストを引き出しに保存し直す
+                localStorage.setItem('custom_game_list', JSON.stringify(gamesArray));
+                
+                // 画面を新しく更新して、消去したカードをパッと消し去る
+                window.loadCustomGames();
+            }
+        };
+
+        // 貼り付けたその瞬間にも、画面に最新のカード状態を100%確実に反映させます
+        if (typeof window.loadCustomGames === 'function') {
+            window.loadCustomGames();
+        }
+    })();
+</script>
+<script>
+    // 「ゲームを追加」ボタンを押したときにパスワードを求めるセキュリティパーツ
+    (function() {
+        // 追加ボタンのアクションを、パスワード認証仕様に完全上書きします
+        window.triggerIndependentAdd = function() {
+            // 画面にパスワード入力ポップアップを表示
+            var inputPassword = prompt("【管理者認証】\nゲームを追加するための管理パスワードを入力してください：");
+            
+            // ★ パスワードを「1234」に設定しています！
+            if (inputPassword === "1234") {
+                // 合っていたら、フォルダからファイルを選ぶ画面を100%確実に開きます
+                document.getElementById('hidden-file-link-input').click();
+            } else if (inputPassword !== null) {
+                // 間違っていたらブロックして弾きます
+                alert("【アクセス拒否】パスワードが違います。ゲームを追加できません。");
+            }
+        };
+    })();
+</script>
